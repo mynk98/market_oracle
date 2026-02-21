@@ -1,0 +1,7 @@
+pandas
+pandas_ta
+streamlit
+plotly
+yfinance
+duckduckgo_search
+matplotlib
