@@ -136,12 +136,20 @@ def main():
             if new_ticker:
                 with st.spinner(f"Running deep-scan on {new_ticker}..."):
                     import subprocess
+                    import re
                     result = subprocess.run([python_exe, scanner_script, new_ticker], capture_output=True, text=True)
                     try:
-                        res_data = json.loads(result.stdout)
+                        # Extract JSON block using regex if there's surrounding text
+                        raw_out = result.stdout.strip()
+                        json_match = re.search(r'\[.*\]', raw_out, re.DOTALL)
+                        if json_match:
+                            res_data = json.loads(json_match.group())
+                        else:
+                            res_data = json.loads(raw_out)
+                            
                         if res_data:
                             item = res_data[0]
-                            f = item['fundamentals']
+                            f = item.get('fundamentals', {})
                             color = "green" if item['action'] == "BUY" else "red" if item['action'] == "SELL" else "white"
                             
                             st.markdown(f"""
@@ -156,22 +164,26 @@ def main():
                             with col1:
                                 st.subheader("📊 Technical Metrics")
                                 st.write(f"- RSI: **{item['rsi']}**")
-                                st.write(f"- Target: **₹{item['potential_profit_pct']}%** upside")
+                                st.write(f"- Target: **{item['potential_profit_pct']}%** upside")
                                 st.write(f"- Stop Loss: **{item['potential_loss_pct']}%** risk")
                             with col2:
                                 st.subheader("🏢 Fundamental Metrics (Screener Mode)")
-                                st.write(f"- Fundamental Health: **{f['score']}/100**")
-                                st.write(f"- PE Ratio: **{f['pe']}** (Sector: {f['sector_pe']})")
-                                st.write(f"- Return on Equity: **{f['roe_pct']}%**")
-                                st.write(f"- Debt-to-Equity: **{f['debt_to_equity']}**")
+                                st.write(f"- Fundamental Health: **{f.get('score', 'N/A')}/100**")
+                                st.write(f"- PE Ratio: **{f.get('pe', 'N/A')}** (Sector: {f.get('sector_pe', 'N/A')})")
+                                st.write(f"- Return on Equity: **{f.get('roe_pct', 'N/A')}%**")
+                                st.write(f"- Debt-to-Equity: **{f.get('debt_to_equity', 'N/A')}**")
                             
                             if st.button("➕ Add to Main Watchlist"):
                                 if item['symbol'] not in watchlist:
                                     watchlist.append(item['symbol'])
                                     save_json(watchlist, WATCHLIST_FILE)
                                     st.success(f"Added {item['symbol']} to watchlist.")
-                        else: st.error("No data found.")
-                    except: st.error("Analysis failed. Verify ticker.")
+                        else: st.error("No data found for this ticker.")
+                    except Exception as e:
+                        st.error(f"Analysis failed: {e}")
+                        st.write("Raw output for debugging:")
+                        st.code(result.stdout)
+                        st.code(result.stderr)
 
 if __name__ == "__main__":
     main()
