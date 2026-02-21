@@ -8,8 +8,10 @@ import sys
 
 st.set_page_config(page_title="Lyra Market Oracle", layout="wide")
 
-BASE_DIR = "/Users/abhisheksonkar/Project/gemini personality"
-DATA_DIR = os.path.join(BASE_DIR, "market_oracle/data")
+# --- Configuration (Relative Paths) ---
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(SCRIPT_DIR)
+DATA_DIR = os.path.join(BASE_DIR, "data")
 SCAN_FILE = os.path.join(DATA_DIR, "scan_results.json")
 PORTFOLIO_FILE = os.path.join(DATA_DIR, "portfolio.json")
 PRED_LOG_FILE = os.path.join(DATA_DIR, "prediction_log.json")
@@ -18,8 +20,10 @@ WATCHLIST_FILE = os.path.join(DATA_DIR, "watchlist.json")
 
 def load_json(path, default=None):
     if os.path.exists(path):
-        with open(path, "r") as f:
-            return json.load(f)
+        try:
+            with open(path, "r") as f:
+                return json.load(f)
+        except: return default
     return default
 
 def save_json(data, path):
@@ -38,8 +42,12 @@ def main():
     news_data = load_json(NEWS_FILE)
     watchlist = load_json(WATCHLIST_FILE, ["RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "SBIN.NS", "MCX.NS", "SILVERBEES.NS", "BSE.NS"])
 
-    python_exe = sys.executable
-    scanner_script = os.path.join(BASE_DIR, "market_oracle/scripts/market_scanner.py")
+    # Use the local venv from the submodule
+    python_exe = os.path.join(BASE_DIR, "venv/bin/python3")
+    if not os.path.exists(python_exe):
+        python_exe = sys.executable
+    
+    scanner_script = os.path.join(SCRIPT_DIR, "market_scanner.py")
 
     # --- TAB 1: SCANNER ---
     with tab1:
@@ -78,7 +86,11 @@ def main():
                 os.system(f'"{python_exe}" "{scanner_script}"')
                 st.rerun()
         else:
-            st.info("Trigger a sync to see daily signals.")
+            st.info("No scan data found. Please trigger an initial sync to populate the dashboard.")
+            if st.button("🚀 Trigger Initial Market & News Sync"):
+                with st.spinner("Initializing Market Engine..."):
+                    os.system(f'"{python_exe}" "{scanner_script}"')
+                    st.rerun()
 
     # --- TAB 2: PORTFOLIO ---
     with tab2:
@@ -126,6 +138,7 @@ def main():
                                 st.write(item.get('snippet', ''))
                                 st.caption(f"Source: {item.get('source', 'Unknown')} | [Link]({item.get('url', '#')})")
                                 st.divider()
+                    else: st.error(f"Error: {items}")
         else: st.info("No news data found.")
 
     # --- TAB 5: CUSTOM ANALYSIS ---
