@@ -6,6 +6,7 @@ import os
 import datetime
 import re
 import sys
+import contextlib
 from nsepython import nse_eq
 
 # --- Configuration ---
@@ -20,6 +21,17 @@ WATCHLIST_FILE = os.path.join(DATA_DIR, "watchlist.json")
 
 STARTING_CASH = 100000.0
 DEFAULT_TICKERS = ["RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "SBIN.NS", "MCX.NS", "SILVERBEES.NS", "BSE.NS"]
+
+@contextlib.contextmanager
+def silence_stdout():
+    """Redirects stdout to stderr to prevent breaking JSON output."""
+    new_target = sys.stderr
+    old_target = sys.stdout
+    sys.stdout = new_target
+    try:
+        yield new_target
+    finally:
+        sys.stdout = old_target
 
 def load_json(file_path, default=None):
     if os.path.exists(file_path):
@@ -52,59 +64,63 @@ def get_news_sentiment():
 
 def get_fundamental_score(symbol):
     """Calculates a fundamental score (0-100) using yfinance and nsepython."""
-    try:
-        # 1. Clean symbol for NSE
-        clean_sym = symbol.replace(".NS", "")
-        
-        # 2. Get Sector PE from NSE
-        sector_pe = 20 # Default
+    with silence_stdout():
         try:
-            meta = nse_eq(clean_sym).get('metadata', {})
-            sector_pe = meta.get('pdSectorPe', 20)
-        except: pass
-        
-        # 3. Get Key Metrics from yfinance
-        ticker = yf.Ticker(symbol)
-        info = ticker.info
-        
-        pe = info.get('forwardPE') or info.get('trailingPE') or 30
-        roe = info.get('returnOnEquity', 0)
-        debt_to_eq = info.get('debtToEquity', 0) / 100 # yf often returns 100 for 1.0
-        div_yield = info.get('dividendYield', 0)
-        
-        f_score = 50 # Start at neutral
-        
-        # Valuation logic
-        if pe < sector_pe: f_score += 15
-        elif pe > sector_pe * 1.5: f_score -= 10
-        
-        # Profitability logic
-        if roe > 0.15: f_score += 15 # > 15% ROE is good
-        elif roe < 0.05: f_score -= 10
-        
-        # Risk logic
-        if debt_to_eq < 1.0: f_score += 10
-        elif debt_to_eq > 2.0: f_score -= 15
-        
-        # Dividend logic
-        if div_yield > 0.02: f_score += 10
-        
-        return {
-            "score": max(0, min(100, f_score)),
-            "pe": round(pe, 2),
-            "sector_pe": round(sector_pe, 2),
-            "roe_pct": round(roe * 100, 2),
-            "debt_to_equity": round(debt_to_eq, 2)
-        }
-    except:
-        return {"score": 50, "pe": "N/A", "sector_pe": "N/A", "roe_pct": "N/A", "debt_to_equity": "N/A"}
+            # 1. Clean symbol for NSE
+            clean_sym = symbol.replace(".NS", "")
+            
+            # 2. Get Sector PE from NSE
+            sector_pe = 20 # Default
+            try:
+                meta = nse_eq(clean_sym).get('metadata', {})
+                sector_pe = meta.get('pdSectorPe', 20)
+            except: pass
+            
+            # 3. Get Key Metrics from yfinance
+            ticker = yf.Ticker(symbol)
+            info = ticker.info
+            
+            pe = info.get('forwardPE') or info.get('trailingPE') or 30
+            roe = info.get('returnOnEquity', 0)
+            debt_to_eq = info.get('debtToEquity', 0) / 100 # yf often returns 100 for 1.0
+            div_yield = info.get('dividendYield', 0)
+            
+            f_score = 50 # Start at neutral
+            
+            # Valuation logic
+            if pe < sector_pe: f_score += 15
+            elif pe > sector_pe * 1.5: f_score -= 10
+            
+            # Profitability logic
+            if roe > 0.15: f_score += 15 # > 15% ROE is good
+            elif roe < 0.05: f_score -= 10
+            
+            # Risk logic
+            if debt_to_eq < 1.0: f_score += 10
+            elif debt_to_eq > 2.0: f_score -= 15
+            
+            # Dividend logic
+            if div_yield > 0.02: f_score += 10
+            
+            return {
+                "score": max(0, min(100, f_score)),
+                "pe": round(pe, 2),
+                "sector_pe": round(sector_pe, 2),
+                "roe_pct": round(roe * 100, 2),
+                "debt_to_equity": round(debt_to_eq, 2)
+            }
+        except:
+            return {"score": 50, "pe": "N/A", "sector_pe": "N/A", "roe_pct": "N/A", "debt_to_equity": "N/A"}
 
 def analyze_ticker(symbol, rsi_buy_thresh, rsi_sell_thresh, sentiment_bias):
     try:
         if symbol.isdigit(): symbol = f"{symbol}.BO"
-        ticker = yf.Ticker(symbol)
-        df = ticker.history(period="1y")
-        if len(df) < 30: return None
+        
+        with silence_stdout():
+            ticker = yf.Ticker(symbol)
+            df = ticker.history(period="1y")
+            
+        if df is None or len(df) < 30: return None
             
         df.ta.rsi(append=True)
         df.ta.macd(append=True)
@@ -152,9 +168,12 @@ def analyze_ticker(symbol, rsi_buy_thresh, rsi_sell_thresh, sentiment_bias):
         profit_pct = round(((target_price - price) / price) * 100, 2) if action == "BUY" else round(((price - target_price) / price) * 100, 2)
         loss_pct = round(((price - stop_loss) / price) * 100, 2) if action == "BUY" else round(((stop_loss - price) / price) * 100, 2)
 
+        with silence_stdout():
+            short_name = ticker.info.get('shortName', symbol)
+
         return {
             "symbol": symbol,
-            "name": ticker.info.get('shortName', symbol),
+            "name": short_name,
             "price": price,
             "action": action,
             "priority": priority,
@@ -214,6 +233,7 @@ def run_pipeline(custom_tickers=None):
         save_json(current_scan, SCAN_RESULTS_FILE)
         save_json(portfolio, PORTFOLIO_FILE)
         save_json(pred_log, PREDICTION_LOG_FILE)
+        print(f"[*] Pipeline Complete. Value: ₹{portfolio['total_value']}", file=sys.stderr)
         
     return current_scan
 
