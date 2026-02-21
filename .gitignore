@@ -1,0 +1,9 @@
+venv/
+__pycache__/
+.DS_Store
+.streamlit/
+data/news_archive/news_*.json
+data/historical_predictions.json
+data/latest_news.json
+data/scan_results.json
+data/event_impact_log.json

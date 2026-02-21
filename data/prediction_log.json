@@ -1,0 +1,7 @@
+{
+  "last_updated": "2026-02-21T00:00:00.000000",
+  "buy_rsi_threshold": 29.0,
+  "sell_rsi_threshold": 71.0,
+  "accuracy_score": 27.0,
+  "predictions": []
+}

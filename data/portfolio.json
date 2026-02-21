@@ -1,0 +1,23 @@
+{
+  "cash": 81055.2,
+  "invested": 18944.8,
+  "total_value": 100000.0,
+  "holdings": {
+    "INFY.NS": {
+      "qty": 14,
+      "avg_price": 1353.2,
+      "date_bought": "2026-02-22T00:21:08.362427"
+    }
+  },
+  "total_profit_loss": 0.0,
+  "trade_history": [
+    {
+      "date": "2026-02-22T00:21:08.362434",
+      "type": "BUY",
+      "symbol": "INFY.NS",
+      "qty": 14,
+      "price": 1353.2,
+      "reason": "High Priority Signal"
+    }
+  ]
+}
